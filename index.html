@@ -7,260 +7,243 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css">
 <style>
   :root {
-    --bg: #f3f6f4; --panel: #ffffff; --ink: #14231c; --muted: #5d6f66; --line: #d5dfd9;
-    --accent: #0b7a4b; --ok: #1a9b5b; --low: #e0a100; --none: #d64545; --off: #8a949e;
-    color-scheme: light;
+    --bg:#f3f6f4; --panel:#fff; --ink:#14231c; --muted:#4d5f56; --line:#d5dfd9; --sel:#eaf3ee;
+    --accent:#0b7a4b; --ok:#0b7a4b; --low:#d99a00; --none:#c93a3a; --off:#6f7b84; color-scheme:light;
   }
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
-      --bg: #0f1a15; --panel: #172620; --ink: #e8f1ec; --muted: #9bb0a5; --line: #2a3d34;
-      --accent: #4cc790; --ok: #3ecf8e; --low: #f0b429; --none: #ef6b6b; --off: #7a858f;
-      color-scheme: dark;
+      --bg:#0f1a15; --panel:#172620; --ink:#e8f1ec; --muted:#9bb0a5; --line:#2a3d34; --sel:#1f3329;
+      --accent:#4cc790; --ok:#3ecf8e; --low:#f0b429; --none:#ef6b6b; --off:#8a959e; color-scheme:dark;
     }
   }
-  * { box-sizing: border-box; }
-  html, body { height: 100%; margin: 0; }
-  body {
-    font-family: "Trebuchet MS", "Segoe UI", system-ui, sans-serif;
-    background: var(--bg); color: var(--ink);
-    display: flex; flex-direction: column;
+  * { box-sizing:border-box; }
+  html, body { height:100%; margin:0; }
+  body { font-family:"Trebuchet MS","Segoe UI",system-ui,sans-serif; background:var(--bg); color:var(--ink); display:flex; flex-direction:column; }
+  button, input { font:inherit; color:inherit; }
+  :focus-visible { outline:2px solid var(--accent); outline-offset:1px; }
+  header { flex:none; height:60px; background:var(--panel); border-bottom:1px solid var(--line); display:flex; align-items:center; gap:14px; padding:0 14px; z-index:1200; }
+  h1 { font-size:1.1rem; margin:0; }
+  h1 span { color:var(--accent); }
+  .btn { height:44px; padding:0 14px; border:1px solid var(--line); border-radius:8px; background:var(--bg); cursor:pointer; }
+  .icon { width:44px; padding:0; display:flex; align-items:center; justify-content:center; }
+  .stats { margin-left:auto; display:flex; gap:18px; align-items:center; font-size:.85rem; color:var(--muted); }
+  .stats b { color:var(--ink); font-size:1rem; }
+  .layout { flex:1; min-height:0; display:flex; position:relative; }
+  aside { width:340px; flex:none; background:var(--panel); border-right:1px solid var(--line); display:flex; flex-direction:column; z-index:1100; transition:margin-left .2s; }
+  body.closed aside { margin-left:-340px; visibility:hidden; transition:margin-left .2s, visibility 0s .2s; }
+  .filters { padding:16px; display:flex; flex-direction:column; gap:16px; border-bottom:1px solid var(--line); }
+  .fhead { display:flex; align-items:center; justify-content:space-between; }
+  h2 { margin:0; font-size:1rem; }
+  .link { border:0; background:none; color:var(--accent); font-weight:700; text-decoration:underline; cursor:pointer; height:36px; padding:0 6px; }
+  label.t { display:block; font-size:.9rem; font-weight:700; margin-bottom:6px; }
+  .field { position:relative; }
+  .field input { width:100%; height:44px; padding:0 40px 0 12px; border:1px solid var(--muted); border-radius:8px; background:var(--bg); font-size:.9rem; }
+  .field button { position:absolute; right:4px; top:4px; width:36px; height:36px; border:0; background:none; color:var(--muted); cursor:pointer; font-size:16px; }
+  fieldset { margin:0; padding:0; border:0; display:flex; flex-direction:column; gap:8px; }
+  legend { padding:0; margin-bottom:8px; font-size:.9rem; font-weight:700; }
+  .chk { display:flex; align-items:center; gap:10px; min-height:44px; padding:0 10px; border:1px solid var(--line); border-radius:8px; background:var(--panel); font-size:.9rem; cursor:pointer; }
+  .chk input { width:18px; height:18px; margin:0; accent-color:var(--accent); }
+  .sw { width:12px; height:12px; border-radius:50%; flex:none; }
+  .chk .n { margin-left:auto; font-size:.8rem; color:var(--muted); }
+  .count { flex:none; padding:10px 16px; font-size:.85rem; color:var(--muted); border-bottom:1px solid var(--line); }
+  .count b { color:var(--ink); }
+  #results { flex:1; min-height:0; overflow-y:auto; }
+  .row { width:100%; display:flex; align-items:center; gap:10px; padding:10px 16px; border:0; border-bottom:1px solid var(--line); background:none; text-align:left; cursor:pointer; font-size:.9rem; min-height:44px; }
+  .row:hover, .row.sel { background:var(--sel); }
+  .row .sw { width:10px; height:10px; }
+  .row small { margin-left:auto; color:var(--muted); white-space:nowrap; }
+  .note { padding:14px 16px; color:var(--muted); font-size:.85rem; }
+  #map { flex:1; min-width:0; }
+  .msg { position:absolute; top:76px; left:50%; transform:translateX(-50%); z-index:1300; background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:10px 14px; max-width:90%; }
+  .leaflet-popup-content { margin:12px 14px; font-family:inherit; color:#14231c; }
+  .pop h3 { margin:0 0 2px; font-size:1rem; }
+  .pop p { margin:0 0 8px; color:#4d5f56; font-size:.8rem; }
+  .pop table { border-collapse:collapse; width:100%; font-size:.85rem; }
+  .pop td:last-child { text-align:right; font-weight:700; }
+  @media (max-width:700px) {
+    aside { position:absolute; inset:0 auto 0 0; width:min(340px,90vw); box-shadow:4px 0 18px rgba(0,0,0,.25); }
+    body.closed aside { margin-left:calc(-1 * min(340px,90vw)); }
+    .stats .hide-m { display:none; }
+    .stats { gap:10px; }
   }
-  header {
-    background: var(--panel); border-bottom: 1px solid var(--line);
-    padding: 10px 14px; display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center;
-    z-index: 1000;
-  }
-  h1 { font-size: 1.1rem; margin: 0; font-weight: 700; letter-spacing: .01em; }
-  h1 span { color: var(--accent); }
-
-  /* Buscador desplegable */
-  .combo { position: relative; flex: 1 1 280px; max-width: 460px; }
-  .combo input {
-    width: 100%; padding: 9px 36px 9px 12px; font: inherit; color: var(--ink);
-    background: var(--bg); border: 1px solid var(--line); border-radius: 8px;
-  }
-  .combo input:focus-visible, button:focus-visible, .opt:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-  .combo .chev {
-    position: absolute; right: 4px; top: 4px; width: 30px; height: 30px; border: 0;
-    background: none; color: var(--muted); cursor: pointer; font-size: 14px;
-  }
-  .list {
-    position: absolute; left: 0; right: 0; top: calc(100% + 4px); max-height: 55vh; overflow-y: auto;
-    background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
-    box-shadow: 0 8px 24px rgba(0,0,0,.18); display: none; padding: 4px;
-  }
-  .list.open { display: block; }
-  .opt { display: flex; justify-content: space-between; gap: 10px; padding: 8px 10px; border-radius: 6px; cursor: pointer; font-size: .9rem; }
-  .opt:hover, .opt.active { background: var(--bg); }
-  .opt small { color: var(--muted); white-space: nowrap; }
-  .empty { padding: 10px; color: var(--muted); font-size: .9rem; }
-
-  .stats { display: flex; gap: 16px; font-size: .85rem; color: var(--muted); margin-left: auto; align-items: center; flex-wrap: wrap; }
-  .stats b { color: var(--ink); font-size: 1rem; }
-  button.refresh {
-    border: 1px solid var(--line); background: var(--bg); color: var(--ink); border-radius: 8px;
-    padding: 7px 12px; font: inherit; cursor: pointer;
-  }
-  #map { flex: 1; min-height: 0; }
-  .legend {
-    position: absolute; bottom: 24px; left: 12px; z-index: 900; background: var(--panel); color: var(--ink);
-    border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font-size: .8rem; line-height: 1.6;
-  }
-  .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; }
-  .msg {
-    position: absolute; top: 80px; left: 50%; transform: translateX(-50%); z-index: 950;
-    background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px 14px; max-width: 90%;
-  }
-  .leaflet-popup-content { margin: 12px 14px; font-family: inherit; }
-  .pop h3 { margin: 0 0 2px; font-size: 1rem; }
-  .pop p { margin: 0 0 8px; color: #5d6f66; font-size: .8rem; }
-  .pop table { border-collapse: collapse; width: 100%; font-size: .85rem; }
-  .pop td { padding: 2px 0; } .pop td:last-child { text-align: right; font-weight: 700; }
-  @media (max-width: 600px) { .stats { margin-left: 0; } .legend { bottom: 18px; } }
 </style>
 </head>
 <body>
 <header>
+  <button class="btn icon" id="menu" aria-label="Mostrar u ocultar filtros" aria-controls="panel">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+  </button>
   <h1>Ecobici <span>CDMX</span></h1>
-  <div class="combo">
-    <input id="q" type="text" role="combobox" aria-expanded="false" aria-controls="list" autocomplete="off"
-           placeholder="Buscar cicloestación por nombre o número…" disabled>
-    <button class="chev" id="toggle" aria-label="Mostrar todas las cicloestaciones" tabindex="-1">▼</button>
-    <div class="list" id="list" role="listbox"></div>
-  </div>
   <div class="stats">
-    <span><b id="nSt">–</b> estaciones</span>
+    <span class="hide-m"><b id="nSt">–</b> estaciones</span>
     <span><b id="nBk">–</b> bicis</span>
-    <span id="upd">Cargando…</span>
-    <button class="refresh" id="refresh">Actualizar</button>
+    <span class="hide-m" id="upd">Cargando…</span>
+    <button class="btn" id="refresh">Actualizar</button>
   </div>
 </header>
 
-<div id="map"></div>
-<div class="legend">
-  <div><i style="background:var(--ok)"></i>Muchas bicis (6+)</div>
-  <div><i style="background:var(--low)"></i>Pocas bicis (1–5)</div>
-  <div><i style="background:var(--none)"></i>Sin bicis</div>
-  <div><i style="background:var(--off)"></i>Fuera de servicio</div>
+<div class="layout">
+  <aside id="panel" aria-label="Filtros de cicloestaciones">
+    <div class="filters">
+      <div class="fhead"><h2>Filtros</h2><button class="link" id="clear">Limpiar filtros</button></div>
+      <div>
+        <label class="t" for="q">Nombre de la estación</label>
+        <div class="field">
+          <input id="q" type="search" placeholder="Buscar por nombre o número…" autocomplete="off" disabled>
+          <button id="qx" aria-label="Borrar búsqueda">✕</button>
+        </div>
+      </div>
+      <fieldset id="status">
+        <legend>Estatus</legend>
+        <label class="chk"><input type="checkbox" value="ok" checked><span class="sw" style="background:var(--ok)"></span>Muchas bicis (6 o más)<span class="n" data-n="ok"></span></label>
+        <label class="chk"><input type="checkbox" value="low" checked><span class="sw" style="background:var(--low)"></span>Pocas bicis (1 a 5)<span class="n" data-n="low"></span></label>
+        <label class="chk"><input type="checkbox" value="none" checked><span class="sw" style="background:var(--none)"></span>Sin bicis<span class="n" data-n="none"></span></label>
+        <label class="chk"><input type="checkbox" value="off" checked><span class="sw" style="background:var(--off)"></span>Fuera de servicio<span class="n" data-n="off"></span></label>
+      </fieldset>
+    </div>
+    <div class="count" aria-live="polite" id="count">Cargando estaciones…</div>
+    <div id="results"></div>
+  </aside>
+  <div id="map"></div>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
 <script>
 (() => {
   const GBFS = "https://gbfs.mex.lyftbikes.com/gbfs/gbfs.json";
-  const REFRESH_MS = 60000;
+  const REFRESH_MS = 60000, MAX_ROWS = 100;
   const $ = id => document.getElementById(id);
+  const esc = t => String(t ?? "").replace(/[&<>"]/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;" }[c]));
+  const norm = t => String(t).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  const isMobile = () => matchMedia("(max-width:700px)").matches;
 
-  // Mapa base: OpenStreetMap
-  const map = L.map("map", { zoomControl: true }).setView([19.4326, -99.1332], 13);
+  if (isMobile()) document.body.classList.add("closed");
+
+  const map = L.map("map").setView([19.4326, -99.1332], 13);
   L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
     maxZoom: 19,
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> · Datos: <a href="https://ecobici.cdmx.gob.mx">Ecobici</a> (GBFS)'
   }).addTo(map);
+  const canvas = L.canvas({ padding: 0.5 });
 
-  const canvas = L.canvas({ padding: 0.5 });   // render eficiente de cientos de puntos
-  let stations = new Map();                    // id -> {info, status, marker}
-  let urls = null;
-  let options = [];                            // para el buscador
-  let activeIdx = -1;
+  let stations = new Map(), urls = null, selectedId = null;
+  const filter = { q: "", on: new Set(["ok", "low", "none", "off"]) };
 
-  const getJSON = async url => {
-    const r = await fetch(url, { cache: "no-store" });
-    if (!r.ok) throw new Error("HTTP " + r.status);
-    return r.json();
-  };
+  const getJSON = async url => { const r = await fetch(url, { cache: "no-store" }); if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); };
 
   async function discoverFeeds() {
-    const root = await getJSON(GBFS);
-    const langs = root.data || {};
+    const root = await getJSON(GBFS), langs = root.data || {};
     const lang = langs.es || langs.en || langs[Object.keys(langs)[0]];
     const feeds = Object.fromEntries(lang.feeds.map(f => [f.name, f.url]));
     if (!feeds.station_information || !feeds.station_status) throw new Error("Feeds no encontrados");
     urls = feeds;
   }
 
-  function colorFor(s) {
-    const css = getComputedStyle(document.documentElement);
-    const v = n => css.getPropertyValue(n).trim();
-    if (!s || s.is_renting === 0 || s.is_renting === false || s.is_installed === 0 || s.is_installed === false) return v("--off");
+  const falsy = v => v === 0 || v === false;
+  function statusOf(s) {
+    if (!s || falsy(s.is_renting) || falsy(s.is_installed)) return "off";
     const b = s.num_bikes_available ?? 0;
-    return b === 0 ? v("--none") : b <= 5 ? v("--low") : v("--ok");
+    return b === 0 ? "none" : b <= 5 ? "low" : "ok";
   }
-
-  const esc = t => String(t ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
   function popupHTML(st) {
     const i = st.info, s = st.status || {};
-    const ebikes = s.num_ebikes_available;
-    return `<div class="pop"><h3>${esc(i.name)}</h3><p>${esc(i.address || "")}</p>
-      <table>
-        <tr><td>Bicis disponibles</td><td>${s.num_bikes_available ?? "–"}</td></tr>
-        ${ebikes != null ? `<tr><td>Eléctricas</td><td>${ebikes}</td></tr>` : ""}
-        <tr><td>Espacios libres</td><td>${s.num_docks_available ?? "–"}</td></tr>
-        <tr><td>Capacidad</td><td>${i.capacity ?? "–"}</td></tr>
-        <tr><td>Estado</td><td>${s.is_renting === 0 || s.is_renting === false ? "Fuera de servicio" : "Operando"}</td></tr>
-      </table></div>`;
+    return `<div class="pop"><h3>${esc(i.name)}</h3><p>${esc(i.address || "")}</p><table>
+      <tr><td>Bicis disponibles</td><td>${s.num_bikes_available ?? "–"}</td></tr>
+      ${s.num_ebikes_available != null ? `<tr><td>Eléctricas</td><td>${s.num_ebikes_available}</td></tr>` : ""}
+      <tr><td>Espacios libres</td><td>${s.num_docks_available ?? "–"}</td></tr>
+      <tr><td>Capacidad</td><td>${i.capacity ?? "–"}</td></tr>
+      <tr><td>Estado</td><td>${st.cat === "off" ? "Fuera de servicio" : "Operando"}</td></tr></table></div>`;
+  }
+
+  // Aplica filtros: atenúa en el mapa y reconstruye la lista
+  function applyFilters() {
+    const css = getComputedStyle(document.documentElement);
+    const col = Object.fromEntries(["ok", "low", "none", "off"].map(k => [k, css.getPropertyValue("--" + k).trim()]));
+    const q = norm(filter.q.trim());
+    const counts = { ok: 0, low: 0, none: 0, off: 0 };
+    const shown = [];
+    stations.forEach(st => {
+      const nameOk = !q || st.key.includes(q);
+      if (nameOk) counts[st.cat]++;
+      const match = nameOk && filter.on.has(st.cat);
+      st.match = match;
+      st.marker.setStyle({ fillColor: col[st.cat], fillOpacity: match ? .95 : .12, opacity: match ? 1 : .2, radius: match ? 7 : 5 });
+      if (match) shown.push(st);
+    });
+    document.querySelectorAll("[data-n]").forEach(el => el.textContent = counts[el.dataset.n]);
+    shown.sort((a, b) => a.info.name.localeCompare(b.info.name, "es", { numeric: true }));
+    $("count").innerHTML = `Mostrando <b>${shown.length}</b> de ${stations.size} estaciones`;
+    $("results").innerHTML = shown.length
+      ? shown.slice(0, MAX_ROWS).map(st => `<button class="row${st.info.station_id === selectedId ? " sel" : ""}" data-id="${esc(st.info.station_id)}"><span class="sw" style="background:${col[st.cat]}"></span><span>${esc(st.info.name)}</span><small>${st.status?.num_bikes_available ?? "–"} bicis</small></button>`).join("")
+        + (shown.length > MAX_ROWS ? `<div class="note">Hay ${shown.length - MAX_ROWS} estaciones más. Afina la búsqueda por nombre.</div>` : "")
+      : `<div class="note">Ninguna estación coincide. Cambia el nombre o activa más estatus.</div>`;
+  }
+
+  function pick(id) {
+    const st = stations.get(id); if (!st) return;
+    selectedId = id;
+    if (isMobile()) toggleMenu(false);
+    map.flyTo([st.info.lat, st.info.lon], 17, { duration: .8 });
+    map.once("moveend", () => st.marker.openPopup());
+    document.querySelectorAll(".row").forEach(r => r.classList.toggle("sel", r.dataset.id === id));
+  }
+
+  function toggleMenu(open) {
+    document.body.classList.toggle("closed", open === undefined ? !document.body.classList.contains("closed") : !open);
+    setTimeout(() => map.invalidateSize(), 250);
   }
 
   async function load() {
     $("upd").textContent = "Actualizando…";
     try {
       if (!urls) await discoverFeeds();
-      const [info, status] = await Promise.all([
-        stations.size ? null : getJSON(urls.station_information),
-        getJSON(urls.station_status)
-      ]);
-
-      if (info) {
-        info.data.stations.forEach(i => {
-          const marker = L.circleMarker([i.lat, i.lon], { renderer: canvas, radius: 7, weight: 1.5, color: "#fff", fillOpacity: .95 })
-            .bindPopup(() => popupHTML(stations.get(i.station_id)))
-            .addTo(map);
-          stations.set(i.station_id, { info: i, status: null, marker });
-        });
-      }
-
-      let totalBikes = 0;
+      const [info, status] = await Promise.all([stations.size ? null : getJSON(urls.station_information), getJSON(urls.station_status)]);
+      if (info) info.data.stations.forEach(i => {
+        const marker = L.circleMarker([i.lat, i.lon], { renderer: canvas, radius: 7, weight: 1.5, color: "#fff" })
+          .bindPopup(() => popupHTML(stations.get(i.station_id))).addTo(map);
+        stations.set(i.station_id, { info: i, status: null, cat: "off", marker, match: true,
+          key: norm(i.name + " " + (i.short_name || "") + " " + i.station_id) });
+      });
+      let bikes = 0;
       status.data.stations.forEach(s => {
-        const st = stations.get(s.station_id);
-        if (!st) return;
-        st.status = s;
-        st.marker.setStyle({ fillColor: colorFor(s) });
-        totalBikes += s.num_bikes_available || 0;
+        const st = stations.get(s.station_id); if (!st) return;
+        st.status = s; st.cat = statusOf(s); bikes += s.num_bikes_available || 0;
         if (st.marker.isPopupOpen()) st.marker.setPopupContent(popupHTML(st));
       });
-
       $("nSt").textContent = stations.size;
-      $("nBk").textContent = totalBikes.toLocaleString("es-MX");
+      $("nBk").textContent = bikes.toLocaleString("es-MX");
       $("upd").textContent = "Actualizado " + new Date().toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" });
-      buildOptions();
       $("q").disabled = false;
+      applyFilters();
       $("msg")?.remove();
     } catch (e) {
       console.error(e);
       $("upd").textContent = "Error al cargar";
       if (!$("msg")) {
-        const d = document.createElement("div");
-        d.id = "msg"; d.className = "msg";
+        const d = document.createElement("div"); d.id = "msg"; d.className = "msg";
         d.textContent = "No se pudieron cargar los datos de Ecobici. Revisa tu conexión e intenta de nuevo con «Actualizar».";
         document.body.appendChild(d);
       }
     }
   }
 
-  // Buscador desplegable
-  const norm = t => String(t).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-
-  function buildOptions() {
-    options = [...stations.values()]
-      .map(s => ({ id: s.info.station_id, name: s.info.name, key: norm(s.info.name + " " + (s.info.short_name || "") + " " + s.info.station_id), bikes: s.status?.num_bikes_available }))
-      .sort((a, b) => a.name.localeCompare(b.name, "es", { numeric: true }));
-    renderList($("q").value);
-  }
-
-  function renderList(filter = "") {
-    const f = norm(filter.trim());
-    const matches = options.filter(o => !f || o.key.includes(f)).slice(0, 80);
-    activeIdx = -1;
-    $("list").innerHTML = matches.length
-      ? matches.map(o => `<div class="opt" role="option" tabindex="-1" data-id="${esc(o.id)}"><span>${esc(o.name)}</span><small>${o.bikes ?? "–"} bicis</small></div>`).join("")
-      : `<div class="empty">Sin resultados</div>`;
-  }
-
-  const setOpen = open => { $("list").classList.toggle("open", open); $("q").setAttribute("aria-expanded", open); };
-
-  function pick(id) {
-    const st = stations.get(id);
-    if (!st) return;
-    $("q").value = st.info.name;
-    setOpen(false);
-    map.flyTo([st.info.lat, st.info.lon], 17, { duration: .8 });
-    map.once("moveend", () => st.marker.openPopup());
-  }
-
-  $("q").addEventListener("input", e => { renderList(e.target.value); setOpen(true); });
-  $("q").addEventListener("focus", e => { e.target.select(); renderList(""); setOpen(true); });
-  $("toggle").addEventListener("click", () => {
-    const open = !$("list").classList.contains("open");
-    if (open) { $("q").value = ""; renderList(""); $("q").focus(); }
-    setOpen(open);
+  // Eventos
+  $("menu").addEventListener("click", () => toggleMenu());
+  $("q").addEventListener("input", e => { filter.q = e.target.value; applyFilters(); });
+  $("qx").addEventListener("click", () => { $("q").value = ""; filter.q = ""; applyFilters(); $("q").focus(); });
+  $("status").addEventListener("change", e => {
+    e.target.checked ? filter.on.add(e.target.value) : filter.on.delete(e.target.value);
+    applyFilters();
   });
-  $("list").addEventListener("click", e => { const o = e.target.closest(".opt"); if (o) pick(o.dataset.id); });
-  $("q").addEventListener("keydown", e => {
-    const items = [...$("list").querySelectorAll(".opt")];
-    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
-      e.preventDefault(); setOpen(true);
-      activeIdx = (activeIdx + (e.key === "ArrowDown" ? 1 : -1) + items.length) % (items.length || 1);
-      items.forEach((it, i) => it.classList.toggle("active", i === activeIdx));
-      items[activeIdx]?.scrollIntoView({ block: "nearest" });
-    } else if (e.key === "Enter") {
-      const it = items[activeIdx] || items[0];
-      if (it) pick(it.dataset.id);
-    } else if (e.key === "Escape") setOpen(false);
+  $("clear").addEventListener("click", () => {
+    $("q").value = ""; filter.q = "";
+    document.querySelectorAll("#status input").forEach(c => { c.checked = true; filter.on.add(c.value); });
+    applyFilters();
   });
-  document.addEventListener("click", e => { if (!e.target.closest(".combo")) setOpen(false); });
-
+  $("results").addEventListener("click", e => { const r = e.target.closest(".row"); if (r) pick(r.dataset.id); });
   $("refresh").addEventListener("click", load);
+
   load();
   setInterval(() => { if (!document.hidden) load(); }, REFRESH_MS);
 })();
