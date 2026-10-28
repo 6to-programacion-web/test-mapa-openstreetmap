@@ -3,168 +3,267 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Planteles de la UACM en la Ciudad de México</title>
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<title>Ecobici CDMX · Mapa en tiempo real</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css">
 <style>
-  :root{ --bg:#f3f5f2; --panel:#fff; --ink:#1d2b26; --muted:#5d6b65; --line:#d5dcd7; --uacm:#b3261e; --otras:#2b6f8f; }
-  @media (prefers-color-scheme: dark){
-    :root{ --bg:#14201b; --panel:#1b2a24; --ink:#e8efeb; --muted:#9db0a7; --line:#30443b; --uacm:#ff7a70; --otras:#6cb8d6; }
+  :root {
+    --bg: #f3f6f4; --panel: #ffffff; --ink: #14231c; --muted: #5d6f66; --line: #d5dfd9;
+    --accent: #0b7a4b; --ok: #1a9b5b; --low: #e0a100; --none: #d64545; --off: #8a949e;
+    color-scheme: light;
   }
-  *{box-sizing:border-box}
-  html,body{height:100%;margin:0}
-  body{font-family:"Source Sans 3","Segoe UI",system-ui,sans-serif;background:var(--bg);color:var(--ink);display:flex;flex-direction:column}
-  header{padding:14px 20px;background:var(--panel);border-bottom:1px solid var(--line)}
-  h1{font-family:Georgia,"Times New Roman",serif;font-size:1.35rem;margin:0 0 2px}
-  header p{margin:0;color:var(--muted);font-size:.92rem}
-  main{flex:1;display:flex;min-height:0}
-  aside{width:310px;background:var(--panel);border-right:1px solid var(--line);overflow:auto;padding:14px}
-  aside h2{font-size:1rem;margin:0 0 8px;font-family:Georgia,serif}
-  ul{list-style:none;margin:0 0 16px;padding:0}
-  li button{width:100%;text-align:left;background:none;border:1px solid var(--line);border-radius:6px;padding:8px 10px;margin-bottom:6px;color:var(--ink);font:inherit;cursor:pointer}
-  li button:hover,li button:focus-visible{border-color:var(--uacm);outline:2px solid var(--uacm);outline-offset:1px}
-  li small{display:block;color:var(--muted);font-size:.82rem;line-height:1.3}
-  .dot{display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--uacm);margin-right:7px}
-  #status{font-size:.85rem;color:var(--muted);line-height:1.4}
-  .leg{font-size:.85rem;color:var(--muted);margin-top:10px}
-  .leg span{display:flex;align-items:center;gap:7px;margin-bottom:4px}
-  .sw{width:14px;height:14px;display:inline-block;border-radius:3px}
-  #map{flex:1;min-width:0}
-  @media (max-width:760px){
-    main{flex-direction:column-reverse}
-    aside{width:100%;max-height:40%;border-right:0;border-top:1px solid var(--line)}
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0f1a15; --panel: #172620; --ink: #e8f1ec; --muted: #9bb0a5; --line: #2a3d34;
+      --accent: #4cc790; --ok: #3ecf8e; --low: #f0b429; --none: #ef6b6b; --off: #7a858f;
+      color-scheme: dark;
+    }
   }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    font-family: "Trebuchet MS", "Segoe UI", system-ui, sans-serif;
+    background: var(--bg); color: var(--ink);
+    display: flex; flex-direction: column;
+  }
+  header {
+    background: var(--panel); border-bottom: 1px solid var(--line);
+    padding: 10px 14px; display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center;
+    z-index: 1000;
+  }
+  h1 { font-size: 1.1rem; margin: 0; font-weight: 700; letter-spacing: .01em; }
+  h1 span { color: var(--accent); }
+
+  /* Buscador desplegable */
+  .combo { position: relative; flex: 1 1 280px; max-width: 460px; }
+  .combo input {
+    width: 100%; padding: 9px 36px 9px 12px; font: inherit; color: var(--ink);
+    background: var(--bg); border: 1px solid var(--line); border-radius: 8px;
+  }
+  .combo input:focus-visible, button:focus-visible, .opt:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .combo .chev {
+    position: absolute; right: 4px; top: 4px; width: 30px; height: 30px; border: 0;
+    background: none; color: var(--muted); cursor: pointer; font-size: 14px;
+  }
+  .list {
+    position: absolute; left: 0; right: 0; top: calc(100% + 4px); max-height: 55vh; overflow-y: auto;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(0,0,0,.18); display: none; padding: 4px;
+  }
+  .list.open { display: block; }
+  .opt { display: flex; justify-content: space-between; gap: 10px; padding: 8px 10px; border-radius: 6px; cursor: pointer; font-size: .9rem; }
+  .opt:hover, .opt.active { background: var(--bg); }
+  .opt small { color: var(--muted); white-space: nowrap; }
+  .empty { padding: 10px; color: var(--muted); font-size: .9rem; }
+
+  .stats { display: flex; gap: 16px; font-size: .85rem; color: var(--muted); margin-left: auto; align-items: center; flex-wrap: wrap; }
+  .stats b { color: var(--ink); font-size: 1rem; }
+  button.refresh {
+    border: 1px solid var(--line); background: var(--bg); color: var(--ink); border-radius: 8px;
+    padding: 7px 12px; font: inherit; cursor: pointer;
+  }
+  #map { flex: 1; min-height: 0; }
+  .legend {
+    position: absolute; bottom: 24px; left: 12px; z-index: 900; background: var(--panel); color: var(--ink);
+    border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font-size: .8rem; line-height: 1.6;
+  }
+  .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; }
+  .msg {
+    position: absolute; top: 80px; left: 50%; transform: translateX(-50%); z-index: 950;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px 14px; max-width: 90%;
+  }
+  .leaflet-popup-content { margin: 12px 14px; font-family: inherit; }
+  .pop h3 { margin: 0 0 2px; font-size: 1rem; }
+  .pop p { margin: 0 0 8px; color: #5d6f66; font-size: .8rem; }
+  .pop table { border-collapse: collapse; width: 100%; font-size: .85rem; }
+  .pop td { padding: 2px 0; } .pop td:last-child { text-align: right; font-weight: 700; }
+  @media (max-width: 600px) { .stats { margin-left: 0; } .legend { bottom: 18px; } }
 </style>
 </head>
 <body>
 <header>
-  <h1>Planteles de la UACM en la Ciudad de México</h1>
-  <p>Direcciones según el sitio oficial de la UACM, ubicadas con OpenStreetMap.</p>
+  <h1>Ecobici <span>CDMX</span></h1>
+  <div class="combo">
+    <input id="q" type="text" role="combobox" aria-expanded="false" aria-controls="list" autocomplete="off"
+           placeholder="Buscar cicloestación por nombre o número…" disabled>
+    <button class="chev" id="toggle" aria-label="Mostrar todas las cicloestaciones" tabindex="-1">▼</button>
+    <div class="list" id="list" role="listbox"></div>
+  </div>
+  <div class="stats">
+    <span><b id="nSt">–</b> estaciones</span>
+    <span><b id="nBk">–</b> bicis</span>
+    <span id="upd">Cargando…</span>
+    <button class="refresh" id="refresh">Actualizar</button>
+  </div>
 </header>
-<main>
-  <aside>
-    <h2>Planteles UACM</h2>
-    <ul id="lista"></ul>
-    <div id="status">Ubicando planteles por dirección…</div>
-    <div class="leg">
-      <span><i class="sw" style="background:var(--uacm)"></i> Plantel UACM</span>
-      <span><i class="sw" style="background:var(--otras)"></i> Otras universidades (OSM)</span>
-    </div>
-  </aside>
-  <div id="map" role="region" aria-label="Mapa"></div>
-</main>
 
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="https://unpkg.com/osmtogeojson@3.0.0-beta.5/osmtogeojson.js"></script>
+<div id="map"></div>
+<div class="legend">
+  <div><i style="background:var(--ok)"></i>Muchas bicis (6+)</div>
+  <div><i style="background:var(--low)"></i>Pocas bicis (1–5)</div>
+  <div><i style="background:var(--none)"></i>Sin bicis</div>
+  <div><i style="background:var(--off)"></i>Fuera de servicio</div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
 <script>
-/* Direcciones tomadas del sitio oficial de la UACM.
-   "lat/lng" son coordenadas de respaldo (aproximadas) que se usan solo si la búsqueda por dirección falla. */
-const PLANTELES = [
-  {nombre:"UACM Centro Histórico", alcaldia:"Cuauhtémoc",
-   dir:"Fray Servando T. de Mier 92 y 99, Col. Obrera",
-   q:"Fray Servando Teresa de Mier 99, Obrera, Cuauhtémoc, Ciudad de México",
-   lat:19.4234, lng:-99.1288},
-  {nombre:"UACM Del Valle", alcaldia:"Benito Juárez",
-   dir:"San Lorenzo 290, esq. Roberto Gayol, Col. Del Valle",
-   q:"Avenida San Lorenzo 290, Del Valle Sur, Benito Juárez, Ciudad de México",
-   lat:19.3735, lng:-99.1650},
-  {nombre:"UACM San Lorenzo Tezonco", alcaldia:"Iztapalapa",
-   dir:"Prolongación San Isidro 151, Col. San Lorenzo Tezonco",
-   q:"Prolongación San Isidro 151, San Lorenzo Tezonco, Iztapalapa, Ciudad de México",
-   lat:19.3166, lng:-99.0585},
-  {nombre:"UACM Casa Libertad", alcaldia:"Iztapalapa",
-   dir:"Calz. Ermita Iztapalapa 4163, Col. Lomas de Zaragoza",
-   q:"Calzada Ermita Iztapalapa 4163, Lomas de Zaragoza, Iztapalapa, Ciudad de México",
-   lat:19.3380, lng:-99.0440},
-  {nombre:"UACM Cuautepec", alcaldia:"Gustavo A. Madero",
-   dir:"Av. La Corona 320, Col. Loma La Palma",
-   q:"Avenida La Corona 320, Loma la Palma, Gustavo A. Madero, Ciudad de México",
-   lat:19.5360, lng:-99.1330}
-];
+(() => {
+  const GBFS = "https://gbfs.mex.lyftbikes.com/gbfs/gbfs.json";
+  const REFRESH_MS = 60000;
+  const $ = id => document.getElementById(id);
 
-const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
-const status = document.getElementById("status");
-const pausa = ms => new Promise(r => setTimeout(r, ms));
+  // Mapa base: OpenStreetMap
+  const map = L.map("map", { zoomControl: true }).setView([19.4326, -99.1332], 13);
+  L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    maxZoom: 19,
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> · Datos: <a href="https://ecobici.cdmx.gob.mx">Ecobici</a> (GBFS)'
+  }).addTo(map);
 
-const map = L.map("map").setView([19.40, -99.13], 11);
-const atrib = '&copy; Colaboradores de <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>';
-const base = {
-  "Mapa claro (CARTO)": L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
-    maxZoom:19, subdomains:"abcd", attribution: atrib + ' &copy; <a href="https://carto.com/attributions">CARTO</a>'
-  }),
-  "OpenStreetMap estándar": L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
-    maxZoom:19, attribution: atrib, referrerPolicy:"strict-origin-when-cross-origin"
-  })
-};
-base["Mapa claro (CARTO)"].addTo(map);
+  const canvas = L.canvas({ padding: 0.5 });   // render eficiente de cientos de puntos
+  let stations = new Map();                    // id -> {info, status, marker}
+  let urls = null;
+  let options = [];                            // para el buscador
+  let activeIdx = -1;
 
-const capaOtras = L.layerGroup().addTo(map);
-const capaUacm = L.layerGroup().addTo(map);
-L.control.layers(base, {"Otras universidades": capaOtras, "Planteles UACM": capaUacm}, {collapsed:false}).addTo(map);
+  const getJSON = async url => {
+    const r = await fetch(url, { cache: "no-store" });
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    return r.json();
+  };
 
-function popup(p, nota){
-  return `<strong>${p.nombre}</strong><br>${p.dir}<br>${p.alcaldia}<br><em>${nota}</em>`;
-}
+  async function discoverFeeds() {
+    const root = await getJSON(GBFS);
+    const langs = root.data || {};
+    const lang = langs.es || langs.en || langs[Object.keys(langs)[0]];
+    const feeds = Object.fromEntries(lang.feeds.map(f => [f.name, f.url]));
+    if (!feeds.station_information || !feeds.station_status) throw new Error("Feeds no encontrados");
+    urls = feeds;
+  }
 
-/* Marcadores + lista lateral */
-const lista = document.getElementById("lista");
-PLANTELES.forEach(p => {
-  p.marker = L.circleMarker([p.lat, p.lng], {radius:9, color:"#fff", weight:2, fillColor:css("--uacm"), fillOpacity:1})
-    .bindPopup(popup(p, "Ubicación aproximada")).addTo(capaUacm);
-  const li = document.createElement("li");
-  li.innerHTML = `<button><span class="dot"></span>${p.nombre}<small>${p.dir}</small></button>`;
-  li.firstChild.onclick = () => { map.flyTo(p.marker.getLatLng(), 17); p.marker.openPopup(); };
-  lista.appendChild(li);
-});
-map.fitBounds(L.featureGroup(PLANTELES.map(p => p.marker)).getBounds().pad(0.15));
+  function colorFor(s) {
+    const css = getComputedStyle(document.documentElement);
+    const v = n => css.getPropertyValue(n).trim();
+    if (!s || s.is_renting === 0 || s.is_renting === false || s.is_installed === 0 || s.is_installed === false) return v("--off");
+    const b = s.num_bikes_available ?? 0;
+    return b === 0 ? v("--none") : b <= 5 ? v("--low") : v("--ok");
+  }
 
-/* Ubica cada plantel por su dirección con Nominatim (1 petición por segundo). */
-async function ubicarPorDireccion(){
-  let ok = 0;
-  for(const p of PLANTELES){
-    try{
-      const u = "https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&countrycodes=mx"
-        + "&viewbox=-99.37,19.60,-98.94,19.05&bounded=1&q=" + encodeURIComponent(p.q);
-      const r = await (await fetch(u, {referrerPolicy:"strict-origin-when-cross-origin"})).json();
-      if(r.length){
-        p.marker.setLatLng([+r[0].lat, +r[0].lon]);
-        p.marker.setPopupContent(popup(p, "Ubicada por dirección en OpenStreetMap"));
-        ok++;
+  const esc = t => String(t ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+  function popupHTML(st) {
+    const i = st.info, s = st.status || {};
+    const ebikes = s.num_ebikes_available;
+    return `<div class="pop"><h3>${esc(i.name)}</h3><p>${esc(i.address || "")}</p>
+      <table>
+        <tr><td>Bicis disponibles</td><td>${s.num_bikes_available ?? "–"}</td></tr>
+        ${ebikes != null ? `<tr><td>Eléctricas</td><td>${ebikes}</td></tr>` : ""}
+        <tr><td>Espacios libres</td><td>${s.num_docks_available ?? "–"}</td></tr>
+        <tr><td>Capacidad</td><td>${i.capacity ?? "–"}</td></tr>
+        <tr><td>Estado</td><td>${s.is_renting === 0 || s.is_renting === false ? "Fuera de servicio" : "Operando"}</td></tr>
+      </table></div>`;
+  }
+
+  async function load() {
+    $("upd").textContent = "Actualizando…";
+    try {
+      if (!urls) await discoverFeeds();
+      const [info, status] = await Promise.all([
+        stations.size ? null : getJSON(urls.station_information),
+        getJSON(urls.station_status)
+      ]);
+
+      if (info) {
+        info.data.stations.forEach(i => {
+          const marker = L.circleMarker([i.lat, i.lon], { renderer: canvas, radius: 7, weight: 1.5, color: "#fff", fillOpacity: .95 })
+            .bindPopup(() => popupHTML(stations.get(i.station_id)))
+            .addTo(map);
+          stations.set(i.station_id, { info: i, status: null, marker });
+        });
       }
-    }catch(e){ console.warn(p.nombre, e); }
-    await pausa(1100);
-  }
-  status.textContent = ok === PLANTELES.length
-    ? "Los cinco planteles se ubicaron por su dirección."
-    : `${ok} de ${PLANTELES.length} planteles ubicados por dirección; el resto usa una posición aproximada.`;
-}
 
-/* Otras universidades (API Overpass de OSM) */
-const SERVIDORES = [
-  "https://overpass-api.de/api/interpreter",
-  "https://overpass.kumi.systems/api/interpreter"
-];
-async function overpass(q){
-  let ultimo;
-  for(const url of SERVIDORES){
-    try{
-      const r = await fetch(url, {method:"POST", headers:{"Content-Type":"application/x-www-form-urlencoded"}, body:"data="+encodeURIComponent(q)});
-      if(!r.ok) throw new Error("Overpass respondió "+r.status);
-      return osmtogeojson(await r.json());
-    }catch(e){ ultimo = e; }
-  }
-  throw ultimo;
-}
-async function cargarUniversidades(){
-  const gj = await overpass(`[out:json][timeout:60];rel(1376330);map_to_area->.cdmx;nwr["amenity"="university"](area.cdmx);out center;`);
-  L.geoJSON(gj, {
-    pointToLayer:(f, ll) => L.circleMarker(ll, {radius:6, color:"#fff", weight:1.5, fillColor:css("--otras"), fillOpacity:.95}),
-    filter: f => !/Aut[oó]noma de la Ciudad de M[eé]xico|UACM/i.test(f.properties.name || ""),
-    onEachFeature:(f, l) => l.bindPopup(`<strong>${f.properties.name || "Universidad sin nombre"}</strong>`)
-  }).addTo(capaOtras);
-}
+      let totalBikes = 0;
+      status.data.stations.forEach(s => {
+        const st = stations.get(s.station_id);
+        if (!st) return;
+        st.status = s;
+        st.marker.setStyle({ fillColor: colorFor(s) });
+        totalBikes += s.num_bikes_available || 0;
+        if (st.marker.isPopupOpen()) st.marker.setPopupContent(popupHTML(st));
+      });
 
-ubicarPorDireccion();
-cargarUniversidades().catch(() => console.warn("No se pudieron cargar otras universidades"));
+      $("nSt").textContent = stations.size;
+      $("nBk").textContent = totalBikes.toLocaleString("es-MX");
+      $("upd").textContent = "Actualizado " + new Date().toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" });
+      buildOptions();
+      $("q").disabled = false;
+      $("msg")?.remove();
+    } catch (e) {
+      console.error(e);
+      $("upd").textContent = "Error al cargar";
+      if (!$("msg")) {
+        const d = document.createElement("div");
+        d.id = "msg"; d.className = "msg";
+        d.textContent = "No se pudieron cargar los datos de Ecobici. Revisa tu conexión e intenta de nuevo con «Actualizar».";
+        document.body.appendChild(d);
+      }
+    }
+  }
+
+  // Buscador desplegable
+  const norm = t => String(t).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+
+  function buildOptions() {
+    options = [...stations.values()]
+      .map(s => ({ id: s.info.station_id, name: s.info.name, key: norm(s.info.name + " " + (s.info.short_name || "") + " " + s.info.station_id), bikes: s.status?.num_bikes_available }))
+      .sort((a, b) => a.name.localeCompare(b.name, "es", { numeric: true }));
+    renderList($("q").value);
+  }
+
+  function renderList(filter = "") {
+    const f = norm(filter.trim());
+    const matches = options.filter(o => !f || o.key.includes(f)).slice(0, 80);
+    activeIdx = -1;
+    $("list").innerHTML = matches.length
+      ? matches.map(o => `<div class="opt" role="option" tabindex="-1" data-id="${esc(o.id)}"><span>${esc(o.name)}</span><small>${o.bikes ?? "–"} bicis</small></div>`).join("")
+      : `<div class="empty">Sin resultados</div>`;
+  }
+
+  const setOpen = open => { $("list").classList.toggle("open", open); $("q").setAttribute("aria-expanded", open); };
+
+  function pick(id) {
+    const st = stations.get(id);
+    if (!st) return;
+    $("q").value = st.info.name;
+    setOpen(false);
+    map.flyTo([st.info.lat, st.info.lon], 17, { duration: .8 });
+    map.once("moveend", () => st.marker.openPopup());
+  }
+
+  $("q").addEventListener("input", e => { renderList(e.target.value); setOpen(true); });
+  $("q").addEventListener("focus", e => { e.target.select(); renderList(""); setOpen(true); });
+  $("toggle").addEventListener("click", () => {
+    const open = !$("list").classList.contains("open");
+    if (open) { $("q").value = ""; renderList(""); $("q").focus(); }
+    setOpen(open);
+  });
+  $("list").addEventListener("click", e => { const o = e.target.closest(".opt"); if (o) pick(o.dataset.id); });
+  $("q").addEventListener("keydown", e => {
+    const items = [...$("list").querySelectorAll(".opt")];
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault(); setOpen(true);
+      activeIdx = (activeIdx + (e.key === "ArrowDown" ? 1 : -1) + items.length) % (items.length || 1);
+      items.forEach((it, i) => it.classList.toggle("active", i === activeIdx));
+      items[activeIdx]?.scrollIntoView({ block: "nearest" });
+    } else if (e.key === "Enter") {
+      const it = items[activeIdx] || items[0];
+      if (it) pick(it.dataset.id);
+    } else if (e.key === "Escape") setOpen(false);
+  });
+  document.addEventListener("click", e => { if (!e.target.closest(".combo")) setOpen(false); });
+
+  $("refresh").addEventListener("click", load);
+  load();
+  setInterval(() => { if (!document.hidden) load(); }, REFRESH_MS);
+})();
 </script>
 </body>
 </html>
