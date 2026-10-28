@@ -55,6 +55,12 @@
   .row:hover, .row.sel { background:var(--sel); }
   .row .sw { width:10px; height:10px; }
   .row small { margin-left:auto; color:var(--muted); white-space:nowrap; }
+  .pager { flex:none; display:flex; align-items:center; gap:8px; padding:10px 12px; border-top:1px solid var(--line); background:var(--panel); }
+  .pager[hidden] { display:none; }
+  .pager button { width:44px; height:44px; flex:none; border:1px solid var(--line); border-radius:8px; background:var(--bg); display:flex; align-items:center; justify-content:center; cursor:pointer; }
+  .pager button:disabled { opacity:.4; cursor:default; }
+  .pager .info { flex:1; text-align:center; font-size:.8rem; line-height:1.35; color:var(--muted); }
+  .pager .info b { color:var(--ink); }
   .note { padding:14px 16px; color:var(--muted); font-size:.85rem; }
   #map { flex:1; min-width:0; }
   .msg { position:absolute; top:76px; left:50%; transform:translateX(-50%); z-index:1300; background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:10px 14px; max-width:90%; }
@@ -107,6 +113,11 @@
     </div>
     <div class="count" aria-live="polite" id="count">Cargando estaciones…</div>
     <div id="results"></div>
+    <nav class="pager" id="pager" aria-label="Paginación de resultados" hidden>
+      <button id="prev" aria-label="Página anterior"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 6-6 6 6 6"/></svg></button>
+      <div class="info" id="pInfo" aria-live="polite"></div>
+      <button id="next" aria-label="Página siguiente"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button>
+    </nav>
   </aside>
   <div id="map"></div>
 </div>
@@ -132,7 +143,8 @@
 
   let stations = new Map(), urls = null, selectedId = null;
   const filter = { p: { mode: "empty" }, on: new Set(["ok", "low", "none", "off"]) };
-  let lastSig = "";
+  let lastSig = "", page = 0;
+  const PAGE_SIZE = 50;
 
   const getJSON = async url => { const r = await fetch(url, { cache: "no-store" }); if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); };
 
@@ -194,13 +206,20 @@
     });
     document.querySelectorAll("[data-n]").forEach(el => el.textContent = counts[el.dataset.n]);
     shown.sort((a, b) => a.info.name.localeCompare(b.info.name, "es", { numeric: true }));
-    $("count").innerHTML = `Mostrando <b>${shown.length}</b> de ${stations.size} estaciones`;
-    const listSig = shown.map(s => s.info.station_id + s.cat + (s.status?.num_bikes_available ?? "")).join("|") + "#" + selectedId;
+    const pages = Math.max(1, Math.ceil(shown.length / PAGE_SIZE));
+    if (page >= pages) page = pages - 1;
+    const start = page * PAGE_SIZE, items = shown.slice(start, start + PAGE_SIZE);
+    $("count").innerHTML = `Resultados <b>${shown.length}</b> de ${stations.size} estaciones`;
+    $("pager").hidden = shown.length <= PAGE_SIZE;
+    $("pInfo").innerHTML = `Estaciones <b>${start + 1}–${start + items.length}</b> de ${shown.length}<br>Página <b>${page + 1}</b> de ${pages}`;
+    $("prev").disabled = page === 0;
+    $("next").disabled = page >= pages - 1;
+    const listSig = items.map(s => s.info.station_id + s.cat + (s.status?.num_bikes_available ?? "")).join("|") + "#" + selectedId + "#" + page;
     if (listSig !== lastSig) {
       lastSig = listSig;
       const raw = $("q").value.trim();
       $("results").innerHTML = shown.length
-        ? shown.map(st => `<button class="row${st.info.station_id === selectedId ? " sel" : ""}" data-id="${esc(st.info.station_id)}"><span class="sw" style="background:${col[st.cat]}"></span><span>${esc(st.info.name)}</span><small>${st.status?.num_bikes_available ?? "–"} bicis</small></button>`).join("")
+        ? items.map(st => `<button class="row${st.info.station_id === selectedId ? " sel" : ""}" data-id="${esc(st.info.station_id)}"><span class="sw" style="background:${col[st.cat]}"></span><span>${esc(st.info.name)}</span><small>${st.status?.num_bikes_available ?? "–"} bicis</small></button>`).join("")
         : `<div class="note">${p.mode === "num" || p.mode === "text" ? `Sin resultados para «${esc(raw)}» con los estatus elegidos.` : "Ninguna estación coincide con los filtros."} Prueba con otro dato o activa más estatus.</div>`;
     }
     return shown;
@@ -263,7 +282,7 @@
     $("hint").textContent = bad ? p.msg : "";
     $("hint").className = "hint" + (bad && force ? " err" : "");
     $("q").setAttribute("aria-invalid", bad && force);
-    lastSig = "";
+    lastSig = ""; page = 0;
     return applyFilters();
   }
   $("q").addEventListener("input", () => { clearTimeout(timer); timer = setTimeout(() => runSearch(false), 200); });
@@ -276,6 +295,7 @@
   $("qx").addEventListener("click", () => { $("q").value = ""; runSearch(false); $("q").focus(); });
   $("status").addEventListener("change", e => {
     e.target.checked ? filter.on.add(e.target.value) : filter.on.delete(e.target.value);
+    page = 0;
     applyFilters();
   });
   $("clear").addEventListener("click", () => {
@@ -284,6 +304,9 @@
     runSearch(false);
   });
   $("results").addEventListener("click", e => { const r = e.target.closest(".row"); if (r) pick(r.dataset.id); });
+  const go = d => { page += d; applyFilters(); $("results").scrollTop = 0; };
+  $("prev").addEventListener("click", () => go(-1));
+  $("next").addEventListener("click", () => go(1));
   $("refresh").addEventListener("click", load);
 
   load();
