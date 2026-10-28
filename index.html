@@ -39,6 +39,9 @@
   .field { position:relative; }
   .field input { width:100%; height:44px; padding:0 40px 0 12px; border:1px solid var(--muted); border-radius:8px; background:var(--bg); font-size:.9rem; }
   .field button { position:absolute; right:4px; top:4px; width:36px; height:36px; border:0; background:none; color:var(--muted); cursor:pointer; font-size:16px; }
+  .hint { min-height:0; margin-top:6px; font-size:.8rem; color:var(--muted); }
+  .hint:empty { display:none; }
+  .hint.err { color:var(--none); font-weight:700; }
   fieldset { margin:0; padding:0; border:0; display:flex; flex-direction:column; gap:8px; }
   legend { padding:0; margin-bottom:8px; font-size:.9rem; font-weight:700; }
   .chk { display:flex; align-items:center; gap:10px; min-height:44px; padding:0 10px; border:1px solid var(--line); border-radius:8px; background:var(--panel); font-size:.9rem; cursor:pointer; }
@@ -48,7 +51,7 @@
   .count { flex:none; padding:10px 16px; font-size:.85rem; color:var(--muted); border-bottom:1px solid var(--line); }
   .count b { color:var(--ink); }
   #results { flex:1; min-height:0; overflow-y:auto; }
-  .row { width:100%; display:flex; align-items:center; gap:10px; padding:10px 16px; border:0; border-bottom:1px solid var(--line); background:none; text-align:left; cursor:pointer; font-size:.9rem; min-height:44px; }
+  .row { width:100%; display:flex; align-items:center; gap:10px; padding:10px 16px; border:0; border-bottom:1px solid var(--line); background:none; text-align:left; cursor:pointer; font-size:.9rem; min-height:44px; content-visibility:auto; contain-intrinsic-size:auto 44px; }
   .row:hover, .row.sel { background:var(--sel); }
   .row .sw { width:10px; height:10px; }
   .row small { margin-left:auto; color:var(--muted); white-space:nowrap; }
@@ -89,9 +92,10 @@
       <div>
         <label class="t" for="q">Nombre de la estación</label>
         <div class="field">
-          <input id="q" type="search" placeholder="Buscar por nombre o número…" autocomplete="off" disabled>
+          <input id="q" type="search" placeholder="Nombre (3+ letras) o número (ej. 002)" autocomplete="off" aria-describedby="hint" disabled>
           <button id="qx" aria-label="Borrar búsqueda">✕</button>
         </div>
+        <div class="hint" id="hint" aria-live="polite"></div>
       </div>
       <fieldset id="status">
         <legend>Estatus</legend>
@@ -111,7 +115,7 @@
 <script>
 (() => {
   const GBFS = "https://gbfs.mex.lyftbikes.com/gbfs/gbfs.json";
-  const REFRESH_MS = 60000, MAX_ROWS = 100;
+  const REFRESH_MS = 60000;
   const $ = id => document.getElementById(id);
   const esc = t => String(t ?? "").replace(/[&<>"]/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;" }[c]));
   const norm = t => String(t).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
@@ -127,7 +131,8 @@
   const canvas = L.canvas({ padding: 0.5 });
 
   let stations = new Map(), urls = null, selectedId = null;
-  const filter = { q: "", on: new Set(["ok", "low", "none", "off"]) };
+  const filter = { p: { mode: "empty" }, on: new Set(["ok", "low", "none", "off"]) };
+  let lastSig = "";
 
   const getJSON = async url => { const r = await fetch(url, { cache: "no-store" }); if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); };
 
@@ -156,28 +161,49 @@
       <tr><td>Estado</td><td>${st.cat === "off" ? "Fuera de servicio" : "Operando"}</td></tr></table></div>`;
   }
 
-  // Aplica filtros: atenúa en el mapa y reconstruye la lista
+  // Reglas de búsqueda: 1 a 3 dígitos (número de CE) o al menos 3 letras
+  function parseQuery(raw) {
+    const q = raw.trim();
+    if (!q) return { mode: "empty" };
+    if (!/^[\p{L}\d\s.\-()'’,\/°]+$/u.test(q)) return { mode: "invalid", msg: "Usa solo letras, números y guiones." };
+    const m = q.match(/^(?:ce[\s-]*)?(\d{1,3})$/i);
+    if (m) return { mode: "num", num: m[1].padStart(3, "0") };
+    if (/^\d+$/.test(q)) return { mode: "invalid", msg: "El número de estación tiene de 1 a 3 dígitos." };
+    if ((q.match(/\p{L}/gu) || []).length >= 3) return { mode: "text", tokens: norm(q).split(/\s+/) };
+    return { mode: "invalid", msg: "Escribe al menos 3 letras o un número de estación (ej. 002)." };
+  }
+  const nameMatch = (st, p) =>
+    p.mode === "num" ? st.ce.includes(p.num) : p.mode === "text" ? p.tokens.every(t => st.key.includes(t)) : true;
+
+  // Aplica filtros: atenúa en el mapa y reconstruye la lista solo si cambió
   function applyFilters() {
     const css = getComputedStyle(document.documentElement);
     const col = Object.fromEntries(["ok", "low", "none", "off"].map(k => [k, css.getPropertyValue("--" + k).trim()]));
-    const q = norm(filter.q.trim());
-    const counts = { ok: 0, low: 0, none: 0, off: 0 };
-    const shown = [];
+    const p = filter.p, counts = { ok: 0, low: 0, none: 0, off: 0 }, shown = [];
     stations.forEach(st => {
-      const nameOk = !q || st.key.includes(q);
+      const nameOk = nameMatch(st, p);
       if (nameOk) counts[st.cat]++;
       const match = nameOk && filter.on.has(st.cat);
+      const sig = st.cat + (match ? 1 : 0);
+      if (st.sig !== sig) {
+        st.sig = sig;
+        st.marker.setStyle({ fillColor: col[st.cat], fillOpacity: match ? .95 : .12, opacity: match ? 1 : .2, radius: match ? 7 : 5 });
+      }
       st.match = match;
-      st.marker.setStyle({ fillColor: col[st.cat], fillOpacity: match ? .95 : .12, opacity: match ? 1 : .2, radius: match ? 7 : 5 });
       if (match) shown.push(st);
     });
     document.querySelectorAll("[data-n]").forEach(el => el.textContent = counts[el.dataset.n]);
     shown.sort((a, b) => a.info.name.localeCompare(b.info.name, "es", { numeric: true }));
     $("count").innerHTML = `Mostrando <b>${shown.length}</b> de ${stations.size} estaciones`;
-    $("results").innerHTML = shown.length
-      ? shown.slice(0, MAX_ROWS).map(st => `<button class="row${st.info.station_id === selectedId ? " sel" : ""}" data-id="${esc(st.info.station_id)}"><span class="sw" style="background:${col[st.cat]}"></span><span>${esc(st.info.name)}</span><small>${st.status?.num_bikes_available ?? "–"} bicis</small></button>`).join("")
-        + (shown.length > MAX_ROWS ? `<div class="note">Hay ${shown.length - MAX_ROWS} estaciones más. Afina la búsqueda por nombre.</div>` : "")
-      : `<div class="note">Ninguna estación coincide. Cambia el nombre o activa más estatus.</div>`;
+    const listSig = shown.map(s => s.info.station_id + s.cat + (s.status?.num_bikes_available ?? "")).join("|") + "#" + selectedId;
+    if (listSig !== lastSig) {
+      lastSig = listSig;
+      const raw = $("q").value.trim();
+      $("results").innerHTML = shown.length
+        ? shown.map(st => `<button class="row${st.info.station_id === selectedId ? " sel" : ""}" data-id="${esc(st.info.station_id)}"><span class="sw" style="background:${col[st.cat]}"></span><span>${esc(st.info.name)}</span><small>${st.status?.num_bikes_available ?? "–"} bicis</small></button>`).join("")
+        : `<div class="note">${p.mode === "num" || p.mode === "text" ? `Sin resultados para «${esc(raw)}» con los estatus elegidos.` : "Ninguna estación coincide con los filtros."} Prueba con otro dato o activa más estatus.</div>`;
+    }
+    return shown;
   }
 
   function pick(id) {
@@ -203,7 +229,8 @@
         const marker = L.circleMarker([i.lat, i.lon], { renderer: canvas, radius: 7, weight: 1.5, color: "#fff" })
           .bindPopup(() => popupHTML(stations.get(i.station_id))).addTo(map);
         stations.set(i.station_id, { info: i, status: null, cat: "off", marker, match: true,
-          key: norm(i.name + " " + (i.short_name || "") + " " + i.station_id) });
+          key: norm(i.name + " " + (i.short_name || "")), sig: "",
+          ce: String(i.short_name || "").split("-").map(n => n.trim().padStart(3, "0")) });
       });
       let bikes = 0;
       status.data.stations.forEach(s => {
@@ -230,16 +257,31 @@
 
   // Eventos
   $("menu").addEventListener("click", () => toggleMenu());
-  $("q").addEventListener("input", e => { filter.q = e.target.value; applyFilters(); });
-  $("qx").addEventListener("click", () => { $("q").value = ""; filter.q = ""; applyFilters(); $("q").focus(); });
+  let timer;
+  function runSearch(force) {
+    const p = filter.p = parseQuery($("q").value), bad = p.mode === "invalid";
+    $("hint").textContent = bad ? p.msg : "";
+    $("hint").className = "hint" + (bad && force ? " err" : "");
+    $("q").setAttribute("aria-invalid", bad && force);
+    lastSig = "";
+    return applyFilters();
+  }
+  $("q").addEventListener("input", () => { clearTimeout(timer); timer = setTimeout(() => runSearch(false), 200); });
+  $("q").addEventListener("keydown", e => {
+    if (e.key !== "Enter") return;
+    e.preventDefault(); clearTimeout(timer);
+    const shown = runSearch(true);
+    if ((filter.p.mode === "num" || filter.p.mode === "text") && shown.length === 1) pick(shown[0].info.station_id);
+  });
+  $("qx").addEventListener("click", () => { $("q").value = ""; runSearch(false); $("q").focus(); });
   $("status").addEventListener("change", e => {
     e.target.checked ? filter.on.add(e.target.value) : filter.on.delete(e.target.value);
     applyFilters();
   });
   $("clear").addEventListener("click", () => {
-    $("q").value = ""; filter.q = "";
+    $("q").value = "";
     document.querySelectorAll("#status input").forEach(c => { c.checked = true; filter.on.add(c.value); });
-    applyFilters();
+    runSearch(false);
   });
   $("results").addEventListener("click", e => { const r = e.target.closest(".row"); if (r) pick(r.dataset.id); });
   $("refresh").addEventListener("click", load);
